@@ -17,6 +17,10 @@ import {
   Menu
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { ServicesManager } from "./ServicesManager";
+import { ClientsManager } from "./ClientsManager";
+import { InvoiceManager } from "./InvoiceManager";
+import { ServiceRequestsManager } from "./ServiceRequestsManager";
 
 interface AdminDashboardProps {
   user: User;
@@ -202,55 +206,19 @@ const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
           </TabsContent>
 
           <TabsContent value="invoices">
-            <Card>
-              <CardHeader>
-                <CardTitle>Invoicing</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground mb-4">
-                  Create and manage invoices for your clients. Invoice features coming soon!
-                </p>
-              </CardContent>
-            </Card>
+            <InvoiceManager adminId={user.id} adminProfile={profile} />
           </TabsContent>
 
           <TabsContent value="requests">
-            <Card>
-              <CardHeader>
-                <CardTitle>Service Requests</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">
-                  Manage and respond to client service requests. Feature coming soon!
-                </p>
-              </CardContent>
-            </Card>
+            <ServiceRequestsManager adminId={user.id} />
           </TabsContent>
 
           <TabsContent value="services">
-            <Card>
-              <CardHeader>
-                <CardTitle>Available Services</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">
-                  Manage your service catalog and pricing. Feature coming soon!
-                </p>
-              </CardContent>
-            </Card>
+            <ServicesManager adminId={user.id} />
           </TabsContent>
 
           <TabsContent value="clients">
-            <Card>
-              <CardHeader>
-                <CardTitle>Client Management</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">
-                  View and manage your client relationships. Feature coming soon!
-                </p>
-              </CardContent>
-            </Card>
+            <ClientsManager adminId={user.id} />
           </TabsContent>
         </Tabs>
       </main>
