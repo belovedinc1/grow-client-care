@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { 
   Users, 
   FolderKanban, 
@@ -28,6 +29,7 @@ interface AdminDashboardProps {
 }
 
 const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
+  const [activeTab, setActiveTab] = useState("overview");
   const [stats, setStats] = useState({
     activeClients: 0,
     activeProjects: 0,
@@ -36,10 +38,12 @@ const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
     totalExpenses: 0,
   });
   const [profile, setProfile] = useState<any>(null);
+  const [projects, setProjects] = useState<any[]>([]);
 
   useEffect(() => {
     fetchProfile();
     fetchStats();
+    fetchProjects();
   }, [user.id]);
 
   const fetchProfile = async () => {
@@ -75,6 +79,21 @@ const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
     });
   };
 
+  const fetchProjects = async () => {
+    const { data } = await supabase
+      .from("projects")
+      .select(`
+        *,
+        profiles!projects_client_id_fkey (full_name)
+      `)
+      .eq("admin_id", user.id)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(5);
+    
+    setProjects(data || []);
+  };
+
   const StatCard = ({ title, value, icon: Icon, trend }: any) => (
     <Card className="hover:shadow-lg transition-shadow">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -95,50 +114,157 @@ const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
     </Card>
   );
 
-  const Navigation = () => (
-    <div className="space-y-2">
-      <Button variant="ghost" className="w-full justify-start" onClick={onLogout}>
-        <LogOut className="mr-2 h-4 w-4" />
-        Logout
-      </Button>
-    </div>
-  );
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b bg-card sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Sheet>
-              <SheetTrigger asChild className="lg:hidden">
-                <Button variant="ghost" size="icon">
-                  <Menu className="h-5 w-5" />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="left">
-                <Navigation />
-              </SheetContent>
-            </Sheet>
-            <h1 className="text-2xl font-bold text-primary">Client Care CRM</h1>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="text-right hidden sm:block">
-              <p className="text-sm font-medium">{profile?.full_name || "Admin"}</p>
-              <p className="text-xs text-muted-foreground">{profile?.email}</p>
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      {/* Floating Glass Navigation */}
+      <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-5xl">
+        <div className="backdrop-blur-xl bg-glass-bg border border-glass-border rounded-2xl shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] px-6 py-3">
+          <div className="flex items-center justify-between">
+            {/* Logo */}
+            <h1 className="text-xl font-bold text-primary hidden md:block">Client Care CRM</h1>
+            
+            {/* Desktop Navigation */}
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="hidden md:block">
+              <TabsList className="bg-transparent border-0">
+                <TabsTrigger 
+                  value="overview" 
+                  className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                >
+                  Overview
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="invoices"
+                  className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Invoices
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="requests"
+                  className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                >
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Requests
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="services"
+                  className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                >
+                  <Briefcase className="h-4 w-4 mr-2" />
+                  Services
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="clients"
+                  className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                >
+                  <Users className="h-4 w-4 mr-2" />
+                  Clients
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+
+            {/* Profile & Mobile Menu */}
+            <div className="flex items-center gap-2">
+              {/* Mobile Menu */}
+              <Sheet>
+                <SheetTrigger asChild className="md:hidden">
+                  <Button variant="ghost" size="icon">
+                    <Menu className="h-5 w-5" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left">
+                  <div className="space-y-4 mt-8">
+                    <Button 
+                      variant="ghost" 
+                      className="w-full justify-start"
+                      onClick={() => { setActiveTab("overview"); }}
+                    >
+                      Overview
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      className="w-full justify-start"
+                      onClick={() => { setActiveTab("invoices"); }}
+                    >
+                      <FileText className="mr-2 h-4 w-4" />
+                      Invoices
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      className="w-full justify-start"
+                      onClick={() => { setActiveTab("requests"); }}
+                    >
+                      <MessageSquare className="mr-2 h-4 w-4" />
+                      Requests
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      className="w-full justify-start"
+                      onClick={() => { setActiveTab("services"); }}
+                    >
+                      <Briefcase className="mr-2 h-4 w-4" />
+                      Services
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      className="w-full justify-start"
+                      onClick={() => { setActiveTab("clients"); }}
+                    >
+                      <Users className="mr-2 h-4 w-4" />
+                      Clients
+                    </Button>
+                  </div>
+                </SheetContent>
+              </Sheet>
+
+              {/* Profile Dropdown */}
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant="ghost" className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                      <span className="text-sm font-medium text-primary">
+                        {profile?.full_name?.charAt(0) || "A"}
+                      </span>
+                    </div>
+                    <div className="text-left hidden lg:block">
+                      <p className="text-sm font-medium">{profile?.full_name || "Admin"}</p>
+                      <p className="text-xs text-muted-foreground">{profile?.email}</p>
+                    </div>
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="right" className="w-80">
+                  <div className="space-y-6 mt-8">
+                    <div className="flex items-center gap-4">
+                      <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
+                        <span className="text-2xl font-medium text-primary">
+                          {profile?.full_name?.charAt(0) || "A"}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="font-semibold">{profile?.full_name || "Admin"}</p>
+                        <p className="text-sm text-muted-foreground">{profile?.email}</p>
+                        <p className="text-xs text-muted-foreground">{profile?.phone_number}</p>
+                      </div>
+                    </div>
+                    <div className="border-t pt-4 space-y-2">
+                      <Button variant="ghost" className="w-full justify-start" onClick={onLogout}>
+                        <LogOut className="mr-2 h-4 w-4" />
+                        Logout
+                      </Button>
+                    </div>
+                  </div>
+                </SheetContent>
+              </Sheet>
             </div>
-            <Button variant="outline" onClick={onLogout} className="hidden lg:flex">
-              <LogOut className="mr-2 h-4 w-4" />
-              Logout
-            </Button>
           </div>
         </div>
-      </header>
+      </div>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 pt-32 pb-8">
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8 animate-fade-in">
           <StatCard
             title="Active Clients"
             value={stats.activeClients}
@@ -170,39 +296,56 @@ const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
         </div>
 
         {/* Tabs Section */}
-        <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5 gap-2">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="invoices">
-              <FileText className="h-4 w-4 mr-2" />
-              Invoices
-            </TabsTrigger>
-            <TabsTrigger value="requests">
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Requests
-            </TabsTrigger>
-            <TabsTrigger value="services">
-              <Briefcase className="h-4 w-4 mr-2" />
-              Services
-            </TabsTrigger>
-            <TabsTrigger value="clients">
-              <Users className="h-4 w-4 mr-2" />
-              Clients
-            </TabsTrigger>
-          </TabsList>
-
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsContent value="overview" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Welcome back, {profile?.full_name}!</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">
-                  You have {stats.activeClients} active clients and {stats.activeProjects} ongoing projects.
-                  Your average satisfaction rating is {stats.avgRating.toFixed(1)} out of 5.
-                </p>
-              </CardContent>
-            </Card>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Welcome back, {profile?.full_name}!</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground">
+                    You have {stats.activeClients} active clients and {stats.activeProjects} ongoing projects.
+                    Your average satisfaction rating is {stats.avgRating.toFixed(1)} out of 5.
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle>Active Projects</CardTitle>
+                  <FolderKanban className="h-5 w-5 text-primary" />
+                </CardHeader>
+                <CardContent>
+                  {projects.length === 0 ? (
+                    <p className="text-muted-foreground text-sm">No active projects yet.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {projects.map((project) => (
+                        <div key={project.id} className="border-b pb-3 last:border-0">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <h4 className="font-semibold text-sm">{project.name}</h4>
+                              <p className="text-xs text-muted-foreground">
+                                Client: {project.profiles?.full_name}
+                              </p>
+                            </div>
+                            <Badge variant="outline" className="bg-green-100 text-green-800">
+                              Active
+                            </Badge>
+                          </div>
+                          {project.description && (
+                            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                              {project.description}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           <TabsContent value="invoices">
