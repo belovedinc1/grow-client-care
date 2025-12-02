@@ -61,10 +61,21 @@ export const ClientsManager = ({ adminId }: ClientsManagerProps) => {
       return;
     }
 
-    const clientProfiles = data
-      .filter(item => item.profiles)
-      .map(item => item.profiles as unknown as ClientProfile);
-    
+    const clientProfiles: ClientProfile[] = (data || []).map((item: any) => {
+      if (item.profiles) {
+        return item.profiles as ClientProfile;
+      }
+
+      // Fallback for clients whose profile row hasn't been created yet
+      return {
+        id: item.client_id,
+        full_name: "Client profile pending",
+        email: null,
+        phone_number: null,
+        avatar_url: null,
+      };
+    });
+
     setClients(clientProfiles);
   };
 
@@ -93,12 +104,20 @@ export const ClientsManager = ({ adminId }: ClientsManagerProps) => {
       return;
     }
 
-    // Update phone number in profile
-    if (formData.phone_number) {
-      await supabase
-        .from("profiles")
-        .update({ phone_number: formData.phone_number })
-        .eq("id", authData.user.id);
+    // Ensure profile exists for this client so relationships and dashboards work correctly
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .upsert({
+        id: authData.user.id,
+        full_name: formData.full_name,
+        email: formData.email,
+        phone_number: formData.phone_number || null,
+        role: "client",
+      });
+
+    if (profileError) {
+      toast({ title: "Error", description: profileError.message, variant: "destructive" });
+      return;
     }
 
     // Create client relationship
