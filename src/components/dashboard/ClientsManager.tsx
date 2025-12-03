@@ -42,33 +42,43 @@ export const ClientsManager = ({ adminId }: ClientsManagerProps) => {
   }, [adminId]);
 
   const fetchClients = async () => {
-    const { data, error } = await supabase
+    // First get client relationships
+    const { data: clientData, error: clientError } = await supabase
       .from("clients")
-      .select(`
-        client_id,
-        profiles!clients_client_id_fkey (
-          id,
-          full_name,
-          email,
-          phone_number,
-          avatar_url
-        )
-      `)
+      .select("client_id")
       .eq("admin_id", adminId);
 
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    if (clientError) {
+      toast({ title: "Error", description: clientError.message, variant: "destructive" });
       return;
     }
 
-    const clientProfiles: ClientProfile[] = (data || []).map((item: any) => {
-      if (item.profiles) {
-        return item.profiles as ClientProfile;
-      }
+    if (!clientData || clientData.length === 0) {
+      setClients([]);
+      return;
+    }
 
-      // Fallback for clients whose profile row hasn't been created yet
+    // Then fetch profiles for those client IDs
+    const clientIds = clientData.map(c => c.client_id);
+    const { data: profileData, error: profileError } = await supabase
+      .from("profiles")
+      .select("id, full_name, email, phone_number, avatar_url")
+      .in("id", clientIds);
+
+    if (profileError) {
+      toast({ title: "Error", description: profileError.message, variant: "destructive" });
+      return;
+    }
+
+    // Map profiles, with fallback for missing ones
+    const profileMap = new Map(profileData?.map(p => [p.id, p]) || []);
+    const clientProfiles: ClientProfile[] = clientIds.map(clientId => {
+      const profile = profileMap.get(clientId);
+      if (profile) {
+        return profile as ClientProfile;
+      }
       return {
-        id: item.client_id,
+        id: clientId,
         full_name: "Client profile pending",
         email: null,
         phone_number: null,
