@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, User, Mail, Phone } from "lucide-react";
+import { Plus, User, Mail, Phone, Pencil, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -13,6 +13,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface ClientProfile {
   id: string;
@@ -29,11 +39,18 @@ interface ClientsManagerProps {
 export const ClientsManager = ({ adminId }: ClientsManagerProps) => {
   const [clients, setClients] = useState<ClientProfile[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<ClientProfile | null>(null);
   const [formData, setFormData] = useState({
     email: "",
     full_name: "",
     phone_number: "",
     password: "",
+  });
+  const [editFormData, setEditFormData] = useState({
+    full_name: "",
+    phone_number: "",
   });
   const { toast } = useToast();
 
@@ -140,6 +157,59 @@ export const ClientsManager = ({ adminId }: ClientsManagerProps) => {
     fetchClients();
   };
 
+  const handleEditClient = (client: ClientProfile) => {
+    setSelectedClient(client);
+    setEditFormData({
+      full_name: client.full_name,
+      phone_number: client.phone_number || "",
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleUpdateClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedClient) return;
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        full_name: editFormData.full_name,
+        phone_number: editFormData.phone_number || null,
+      })
+      .eq("id", selectedClient.id);
+
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    toast({ title: "Success", description: "Client updated successfully" });
+    setIsEditDialogOpen(false);
+    setSelectedClient(null);
+    fetchClients();
+  };
+
+  const handleDeleteClient = async () => {
+    if (!selectedClient) return;
+
+    // Delete the client relationship (profile remains for data integrity)
+    const { error } = await supabase
+      .from("clients")
+      .delete()
+      .eq("admin_id", adminId)
+      .eq("client_id", selectedClient.id);
+
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    toast({ title: "Success", description: "Client removed from your account" });
+    setIsDeleteDialogOpen(false);
+    setSelectedClient(null);
+    fetchClients();
+  };
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -233,11 +303,67 @@ export const ClientsManager = ({ adminId }: ClientsManagerProps) => {
                     )}
                   </div>
                 </div>
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="icon" onClick={() => handleEditClient(client)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => { setSelectedClient(client); setIsDeleteDialogOpen(true); }}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
         )}
       </CardContent>
+
+      {/* Edit Client Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Client</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleUpdateClient} className="space-y-4">
+            <div>
+              <Label htmlFor="edit_full_name">Full Name*</Label>
+              <Input
+                id="edit_full_name"
+                value={editFormData.full_name}
+                onChange={(e) => setEditFormData({ ...editFormData, full_name: e.target.value })}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit_phone">Phone Number</Label>
+              <Input
+                id="edit_phone"
+                type="tel"
+                value={editFormData.phone_number}
+                onChange={(e) => setEditFormData({ ...editFormData, phone_number: e.target.value })}
+              />
+            </div>
+            <Button type="submit" className="w-full">Update Client</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Client?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove {selectedClient?.full_name} from your client list. Their account will remain active but they won't be associated with you anymore.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteClient} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 };
