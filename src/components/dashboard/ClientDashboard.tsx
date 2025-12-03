@@ -24,10 +24,13 @@ const ClientDashboard = ({ user, onLogout }: ClientDashboardProps) => {
   const [projects, setProjects] = useState<any[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [serviceRequests, setServiceRequests] = useState<any[]>([]);
+  const [ratings, setRatings] = useState<any[]>([]);
   const [adminInfo, setAdminInfo] = useState<any>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNewRequestOpen, setIsNewRequestOpen] = useState(false);
+  const [isNewRatingOpen, setIsNewRatingOpen] = useState(false);
   const [newRequest, setNewRequest] = useState({ title: "", description: "", priority: 3 });
+  const [newRating, setNewRating] = useState({ rating: 5, feedback: "", project_id: "" });
   const { toast } = useToast();
   const [stats, setStats] = useState({
     activeProjects: 0,
@@ -46,6 +49,7 @@ const ClientDashboard = ({ user, onLogout }: ClientDashboardProps) => {
     fetchInvoices();
     fetchServiceRequests();
     fetchAdminInfo();
+    fetchRatings();
   };
 
   const fetchProfile = async () => {
@@ -87,11 +91,42 @@ const ClientDashboard = ({ user, onLogout }: ClientDashboardProps) => {
   };
 
   const fetchAdminInfo = async () => {
-    const { data: clientData } = await supabase.from("clients").select("admin_id").eq("client_id", user.id).single();
+    const { data: clientData } = await supabase.from("clients").select("admin_id").eq("client_id", user.id).maybeSingle();
     if (clientData) {
-      const { data: adminProfile } = await supabase.from("profiles").select("*").eq("id", clientData.admin_id).single();
+      const { data: adminProfile } = await supabase.from("profiles").select("*").eq("id", clientData.admin_id).maybeSingle();
       setAdminInfo(adminProfile);
     }
+  };
+
+  const fetchRatings = async () => {
+    const { data } = await supabase.from("satisfaction_ratings").select("*, projects(name)").eq("client_id", user.id).order("created_at", { ascending: false });
+    setRatings(data || []);
+  };
+
+  const handleCreateRating = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminInfo) {
+      toast({ title: "Error", description: "Admin information not found", variant: "destructive" });
+      return;
+    }
+
+    const { error } = await supabase.from("satisfaction_ratings").insert({
+      client_id: user.id,
+      admin_id: adminInfo.id,
+      rating: newRating.rating,
+      feedback: newRating.feedback || null,
+      project_id: newRating.project_id || null,
+    });
+
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    toast({ title: "Success", description: "Feedback submitted successfully" });
+    setIsNewRatingOpen(false);
+    setNewRating({ rating: 5, feedback: "", project_id: "" });
+    fetchRatings();
   };
 
   const handleCreateRequest = async (e: React.FormEvent) => {
@@ -481,11 +516,94 @@ const ClientDashboard = ({ user, onLogout }: ClientDashboardProps) => {
 
         {activeTab === "feedback" && (
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Satisfaction Feedback</CardTitle>
+              <Dialog open={isNewRatingOpen} onOpenChange={setIsNewRatingOpen}>
+                <DialogTrigger asChild>
+                  <Button>Add Feedback</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Rate Your Experience</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleCreateRating} className="space-y-4">
+                    <div>
+                      <Label htmlFor="rating">Rating (1-5 stars)*</Label>
+                      <div className="flex gap-2 mt-2">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <button
+                            key={star}
+                            type="button"
+                            onClick={() => setNewRating({ ...newRating, rating: star })}
+                            className="p-1"
+                          >
+                            <Star
+                              className={`h-8 w-8 ${star <= newRating.rating ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"}`}
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="project">Project (optional)</Label>
+                      <select
+                        id="project"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={newRating.project_id}
+                        onChange={(e) => setNewRating({ ...newRating, project_id: e.target.value })}
+                      >
+                        <option value="">General feedback</option>
+                        {projects.map((project) => (
+                          <option key={project.id} value={project.id}>{project.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <Label htmlFor="feedback">Feedback</Label>
+                      <Textarea
+                        id="feedback"
+                        value={newRating.feedback}
+                        onChange={(e) => setNewRating({ ...newRating, feedback: e.target.value })}
+                        placeholder="Share your experience..."
+                        rows={4}
+                      />
+                    </div>
+                    <Button type="submit" className="w-full">Submit Feedback</Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
             </CardHeader>
             <CardContent>
-              <p className="text-muted-foreground">Rate your experience and provide feedback. Feature coming soon!</p>
+              {ratings.length === 0 ? (
+                <p className="text-muted-foreground">No feedback submitted yet. Share your experience!</p>
+              ) : (
+                <div className="space-y-4">
+                  {ratings.map((rating) => (
+                    <div key={rating.id} className="p-4 border rounded-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <Star
+                            key={star}
+                            className={`h-5 w-5 ${star <= rating.rating ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"}`}
+                          />
+                        ))}
+                        <span className="ml-2 font-semibold">{rating.rating}/5</span>
+                      </div>
+                      {rating.projects?.name && (
+                        <p className="text-sm text-muted-foreground mb-2">
+                          Project: {rating.projects.name}
+                        </p>
+                      )}
+                      {rating.feedback && (
+                        <p className="text-sm">{rating.feedback}</p>
+                      )}
+                      <p className="text-xs text-muted-foreground mt-2">
+                        {new Date(rating.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
