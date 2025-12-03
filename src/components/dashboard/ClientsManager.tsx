@@ -104,21 +104,9 @@ export const ClientsManager = ({ adminId }: ClientsManagerProps) => {
       return;
     }
 
-    // Ensure profile exists for this client so relationships and dashboards work correctly
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .upsert({
-        id: authData.user.id,
-        full_name: formData.full_name,
-        email: formData.email,
-        phone_number: formData.phone_number || null,
-        role: "client",
-      });
-
-    if (profileError) {
-      toast({ title: "Error", description: profileError.message, variant: "destructive" });
-      return;
-    }
+    // Profile is auto-created by the handle_new_user trigger in Supabase
+    // Small delay to ensure trigger completes before creating client relationship
+    await new Promise(resolve => setTimeout(resolve, 500));
 
     // Create client relationship
     const { error: clientError } = await supabase
