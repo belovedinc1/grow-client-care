@@ -22,6 +22,7 @@ import { ServicesManager } from "./ServicesManager";
 import { ClientsManager } from "./ClientsManager";
 import { InvoiceManager } from "./InvoiceManager";
 import { ServiceRequestsManager } from "./ServiceRequestsManager";
+import { ProjectsManager } from "./ProjectsManager";
 
 interface AdminDashboardProps {
   user: User;
@@ -148,6 +149,13 @@ const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
                   Requests
                 </TabsTrigger>
                 <TabsTrigger 
+                  value="projects"
+                  className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                >
+                  <FolderKanban className="h-4 w-4 mr-2" />
+                  Projects
+                </TabsTrigger>
+                <TabsTrigger 
                   value="services"
                   className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
                 >
@@ -197,6 +205,14 @@ const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
                     >
                       <MessageSquare className="mr-2 h-4 w-4" />
                       Requests
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      className="w-full justify-start"
+                      onClick={() => { setActiveTab("projects"); }}
+                    >
+                      <FolderKanban className="mr-2 h-4 w-4" />
+                      Projects
                     </Button>
                     <Button 
                       variant="ghost" 
@@ -354,6 +370,10 @@ const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
 
           <TabsContent value="requests">
             <ServiceRequestsManager adminId={user.id} />
+          </TabsContent>
+
+          <TabsContent value="projects">
+            <ProjectsManager adminId={user.id} />
           </TabsContent>
 
           <TabsContent value="services">
