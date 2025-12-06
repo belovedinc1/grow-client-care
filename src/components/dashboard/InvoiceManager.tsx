@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, FileText, Upload, Download, Eye, MessageCircle, Check, X } from "lucide-react";
+import { Plus, Trash2, FileText, Download, Eye, MessageCircle, Check, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -22,8 +22,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import jsPDF from "jspdf";
+import QRCode from "qrcode";
 
 interface Service {
   id: string;
@@ -72,14 +82,15 @@ export const InvoiceManager = ({ adminId, adminProfile }: InvoiceManagerProps) =
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
+  const [viewQrCode, setViewQrCode] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     client_id: "",
     discount: "0",
     notes: "",
     upi_id: "",
-    upi_method: "id" as "id" | "qr",
   });
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [currentItem, setCurrentItem] = useState({
@@ -88,7 +99,6 @@ export const InvoiceManager = ({ adminId, adminProfile }: InvoiceManagerProps) =
     quantity: "1",
     unit_price: "0",
   });
-  const [qrFile, setQrFile] = useState<File | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -147,6 +157,13 @@ export const InvoiceManager = ({ adminId, adminProfile }: InvoiceManagerProps) =
     setInvoiceItems(data || []);
   };
 
+  const generateUPIQRCode = async (upiId: string, amount: number, payeeName: string): Promise<string> => {
+    // UPI deep link format
+    const upiString = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payeeName)}&am=${amount.toFixed(2)}&cu=INR`;
+    const qrDataUrl = await QRCode.toDataURL(upiString, { width: 256, margin: 2 });
+    return qrDataUrl;
+  };
+
   const addItem = () => {
     const quantity = parseFloat(currentItem.quantity);
     const unitPrice = parseFloat(currentItem.unit_price);
@@ -194,30 +211,22 @@ export const InvoiceManager = ({ adminId, adminProfile }: InvoiceManagerProps) =
       return;
     }
 
-    let upiQrUrl = null;
-
-    if (formData.upi_method === "qr" && qrFile) {
-      const fileExt = qrFile.name.split(".").pop();
-      const fileName = `${adminId}/${Date.now()}.${fileExt}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from("upi-qr-codes")
-        .upload(fileName, qrFile);
-
-      if (uploadError) {
-        toast({ title: "Error", description: uploadError.message, variant: "destructive" });
-        return;
-      }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from("upi-qr-codes")
-        .getPublicUrl(fileName);
-      
-      upiQrUrl = publicUrl;
-    }
-
     const invoiceNumber = `INV-${Date.now()}`;
     const totalAmount = calculateTotal();
+
+    // Generate QR code if UPI ID is provided
+    let upiQrUrl = null;
+    if (formData.upi_id.trim()) {
+      try {
+        upiQrUrl = await generateUPIQRCode(
+          formData.upi_id.trim(),
+          totalAmount,
+          adminProfile?.full_name || "Business"
+        );
+      } catch (error) {
+        console.error("QR generation error:", error);
+      }
+    }
 
     const { data: invoice, error: invoiceError } = await supabase
       .from("invoices")
@@ -229,7 +238,7 @@ export const InvoiceManager = ({ adminId, adminProfile }: InvoiceManagerProps) =
         discount: parseFloat(formData.discount) || 0,
         amount_paid: 0,
         notes: formData.notes || null,
-        upi_id: formData.upi_method === "id" ? formData.upi_id : null,
+        upi_id: formData.upi_id.trim() || null,
         upi_qr_url: upiQrUrl,
       })
       .select()
@@ -254,9 +263,40 @@ export const InvoiceManager = ({ adminId, adminProfile }: InvoiceManagerProps) =
       return;
     }
 
-    toast({ title: "Success", description: "Invoice created successfully" });
+    toast({ title: "Success", description: "Invoice created with payment QR code" });
     setIsDialogOpen(false);
     resetForm();
+    fetchInvoices();
+  };
+
+  const handleDeleteInvoice = async () => {
+    if (!selectedInvoice) return;
+
+    // Delete invoice items first
+    const { error: itemsError } = await supabase
+      .from("invoice_items")
+      .delete()
+      .eq("invoice_id", selectedInvoice.id);
+
+    if (itemsError) {
+      toast({ title: "Error", description: itemsError.message, variant: "destructive" });
+      return;
+    }
+
+    // Delete invoice
+    const { error: invoiceError } = await supabase
+      .from("invoices")
+      .delete()
+      .eq("id", selectedInvoice.id);
+
+    if (invoiceError) {
+      toast({ title: "Error", description: invoiceError.message, variant: "destructive" });
+      return;
+    }
+
+    toast({ title: "Success", description: "Invoice deleted successfully" });
+    setIsDeleteDialogOpen(false);
+    setSelectedInvoice(null);
     fetchInvoices();
   };
 
@@ -283,10 +323,27 @@ export const InvoiceManager = ({ adminId, adminProfile }: InvoiceManagerProps) =
   const handleViewInvoice = async (invoice: Invoice) => {
     setSelectedInvoice(invoice);
     await fetchInvoiceItems(invoice.id);
+    
+    // Generate QR code for viewing if UPI ID exists
+    if (invoice.upi_id) {
+      try {
+        const qr = await generateUPIQRCode(
+          invoice.upi_id,
+          invoice.total_amount - invoice.amount_paid,
+          adminProfile?.full_name || "Business"
+        );
+        setViewQrCode(qr);
+      } catch (error) {
+        setViewQrCode(invoice.upi_qr_url);
+      }
+    } else {
+      setViewQrCode(invoice.upi_qr_url);
+    }
+    
     setIsViewDialogOpen(true);
   };
 
-  const generatePDF = (invoice: Invoice, items: InvoiceItem[]) => {
+  const generatePDF = async (invoice: Invoice, items: InvoiceItem[]) => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     
@@ -335,8 +392,8 @@ export const InvoiceManager = ({ adminId, adminProfile }: InvoiceManagerProps) =
     items.forEach((item) => {
       doc.text(item.service_name.substring(0, 40), 22, yPos);
       doc.text(item.quantity.toString(), 100, yPos);
-      doc.text(`$${item.unit_price.toFixed(2)}`, 120, yPos);
-      doc.text(`$${item.total_price.toFixed(2)}`, 160, yPos);
+      doc.text(`₹${item.unit_price.toFixed(2)}`, 120, yPos);
+      doc.text(`₹${item.total_price.toFixed(2)}`, 160, yPos);
       yPos += 8;
     });
     
@@ -345,29 +402,45 @@ export const InvoiceManager = ({ adminId, adminProfile }: InvoiceManagerProps) =
     doc.line(20, yPos - 5, pageWidth - 20, yPos - 5);
     
     if (invoice.discount > 0) {
-      doc.text(`Discount: -$${invoice.discount.toFixed(2)}`, 120, yPos);
+      doc.text(`Discount: -₹${invoice.discount.toFixed(2)}`, 120, yPos);
       yPos += 8;
     }
     
     doc.setFont("helvetica", "bold");
-    doc.text(`Total: $${invoice.total_amount.toFixed(2)}`, 120, yPos);
+    doc.text(`Total: ₹${invoice.total_amount.toFixed(2)}`, 120, yPos);
     yPos += 8;
-    doc.text(`Paid: $${invoice.amount_paid.toFixed(2)}`, 120, yPos);
+    doc.text(`Paid: ₹${invoice.amount_paid.toFixed(2)}`, 120, yPos);
     yPos += 8;
-    doc.text(`Balance: $${(invoice.total_amount - invoice.amount_paid).toFixed(2)}`, 120, yPos);
+    doc.text(`Balance: ₹${(invoice.total_amount - invoice.amount_paid).toFixed(2)}`, 120, yPos);
     
-    // Payment info
+    // Payment info with QR code
     yPos += 20;
     if (invoice.upi_id) {
       doc.setFont("helvetica", "bold");
       doc.text("Payment Details:", 20, yPos);
       doc.setFont("helvetica", "normal");
       doc.text(`UPI ID: ${invoice.upi_id}`, 20, yPos + 8);
+      
+      // Add QR code to PDF
+      try {
+        const balance = invoice.total_amount - invoice.amount_paid;
+        if (balance > 0) {
+          const qrDataUrl = await generateUPIQRCode(
+            invoice.upi_id,
+            balance,
+            adminProfile?.full_name || "Business"
+          );
+          doc.addImage(qrDataUrl, "PNG", 20, yPos + 15, 50, 50);
+          doc.text("Scan to Pay", 20, yPos + 70);
+        }
+      } catch (error) {
+        console.error("QR generation for PDF failed:", error);
+      }
     }
     
     // Notes
     if (invoice.notes) {
-      yPos += 25;
+      yPos += 80;
       doc.setFont("helvetica", "bold");
       doc.text("Notes:", 20, yPos);
       doc.setFont("helvetica", "normal");
@@ -384,9 +457,9 @@ export const InvoiceManager = ({ adminId, adminProfile }: InvoiceManagerProps) =
       .select("*")
       .eq("invoice_id", invoice.id);
     
-    const doc = generatePDF(invoice, items || []);
+    const doc = await generatePDF(invoice, items || []);
     doc.save(`${invoice.invoice_number}.pdf`);
-    toast({ title: "Success", description: "Invoice downloaded" });
+    toast({ title: "Success", description: "Invoice downloaded with QR code" });
   };
 
   const handleShareWhatsApp = (invoice: Invoice) => {
@@ -398,10 +471,12 @@ export const InvoiceManager = ({ adminId, adminProfile }: InvoiceManagerProps) =
       return;
     }
 
+    const balance = invoice.total_amount - invoice.amount_paid;
     const message = encodeURIComponent(
       `Hello ${invoice.profiles?.full_name},\n\n` +
       `Invoice: ${invoice.invoice_number}\n` +
-      `Amount: $${invoice.total_amount.toFixed(2)}\n` +
+      `Amount: ₹${invoice.total_amount.toFixed(2)}\n` +
+      `Balance Due: ₹${balance.toFixed(2)}\n` +
       `Status: ${invoice.amount_paid >= invoice.total_amount ? "Paid" : "Pending"}\n\n` +
       `${invoice.upi_id ? `Pay via UPI: ${invoice.upi_id}` : ""}\n\n` +
       `Thank you for your business!`
@@ -411,10 +486,9 @@ export const InvoiceManager = ({ adminId, adminProfile }: InvoiceManagerProps) =
   };
 
   const resetForm = () => {
-    setFormData({ client_id: "", discount: "0", notes: "", upi_id: "", upi_method: "id" });
+    setFormData({ client_id: "", discount: "0", notes: "", upi_id: "" });
     setItems([]);
     setCurrentItem({ service_name: "", description: "", quantity: "1", unit_price: "0" });
-    setQrFile(null);
   };
 
   const isPaid = (invoice: Invoice) => invoice.amount_paid >= invoice.total_amount;
@@ -515,7 +589,7 @@ export const InvoiceManager = ({ adminId, adminProfile }: InvoiceManagerProps) =
                       />
                     </div>
                     <div>
-                      <Label htmlFor="unit_price">Unit Price</Label>
+                      <Label htmlFor="unit_price">Unit Price (₹)</Label>
                       <Input
                         id="unit_price"
                         type="number"
@@ -546,7 +620,7 @@ export const InvoiceManager = ({ adminId, adminProfile }: InvoiceManagerProps) =
                         <div key={index} className="flex justify-between items-center text-sm">
                           <span>{item.service_name} (x{item.quantity})</span>
                           <div className="flex items-center gap-2">
-                            <span className="font-medium">${item.total_price.toFixed(2)}</span>
+                            <span className="font-medium">₹{item.total_price.toFixed(2)}</span>
                             <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(index)}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -559,7 +633,7 @@ export const InvoiceManager = ({ adminId, adminProfile }: InvoiceManagerProps) =
               </div>
 
               <div>
-                <Label htmlFor="discount">Discount ($)</Label>
+                <Label htmlFor="discount">Discount (₹)</Label>
                 <Input
                   id="discount"
                   type="number"
@@ -570,37 +644,21 @@ export const InvoiceManager = ({ adminId, adminProfile }: InvoiceManagerProps) =
               </div>
 
               <div className="text-right text-lg font-bold">
-                Total: ${calculateTotal().toFixed(2)}
+                Total: ₹{calculateTotal().toFixed(2)}
               </div>
 
-              <div>
-                <Label>Payment Method</Label>
-                <Tabs value={formData.upi_method} onValueChange={(value) => setFormData({ ...formData, upi_method: value as "id" | "qr" })}>
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="id">UPI ID</TabsTrigger>
-                    <TabsTrigger value="qr">Upload QR Code</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="id" className="mt-4">
-                    <Label htmlFor="upi_id">UPI ID</Label>
-                    <Input
-                      id="upi_id"
-                      value={formData.upi_id}
-                      onChange={(e) => setFormData({ ...formData, upi_id: e.target.value })}
-                      placeholder="yourname@upi"
-                    />
-                  </TabsContent>
-                  <TabsContent value="qr" className="mt-4">
-                    <Label htmlFor="qr_upload">Upload UPI QR Code</Label>
-                    <div className="mt-2">
-                      <Input
-                        id="qr_upload"
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => setQrFile(e.target.files?.[0] || null)}
-                      />
-                    </div>
-                  </TabsContent>
-                </Tabs>
+              <div className="border rounded-lg p-4 bg-muted/50">
+                <Label htmlFor="upi_id">UPI ID (for automatic QR generation)</Label>
+                <Input
+                  id="upi_id"
+                  value={formData.upi_id}
+                  onChange={(e) => setFormData({ ...formData, upi_id: e.target.value })}
+                  placeholder="yourname@upi or yourname@paytm"
+                  className="mt-2"
+                />
+                <p className="text-xs text-muted-foreground mt-2">
+                  A payment QR code will be automatically generated with the invoice amount
+                </p>
               </div>
 
               <div>
@@ -644,9 +702,9 @@ export const InvoiceManager = ({ adminId, adminProfile }: InvoiceManagerProps) =
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-lg font-bold">${invoice.total_amount}</p>
+                    <p className="text-lg font-bold">₹{invoice.total_amount}</p>
                     <p className="text-sm text-muted-foreground">
-                      Paid: ${invoice.amount_paid}
+                      Paid: ₹{invoice.amount_paid}
                     </p>
                   </div>
                 </div>
@@ -676,7 +734,7 @@ export const InvoiceManager = ({ adminId, adminProfile }: InvoiceManagerProps) =
                     WhatsApp
                   </Button>
                   <Button 
-                    variant={isPaid(invoice) ? "destructive" : "default"}
+                    variant={isPaid(invoice) ? "secondary" : "default"}
                     size="sm" 
                     onClick={() => handleMarkAsPaid(invoice)}
                   >
@@ -692,6 +750,13 @@ export const InvoiceManager = ({ adminId, adminProfile }: InvoiceManagerProps) =
                       </>
                     )}
                   </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => { setSelectedInvoice(invoice); setIsDeleteDialogOpen(true); }}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
                 </div>
               </div>
             ))}
@@ -700,7 +765,10 @@ export const InvoiceManager = ({ adminId, adminProfile }: InvoiceManagerProps) =
       </CardContent>
 
       {/* View Invoice Dialog */}
-      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+      <Dialog open={isViewDialogOpen} onOpenChange={(open) => {
+        setIsViewDialogOpen(open);
+        if (!open) setViewQrCode(null);
+      }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Invoice Details</DialogTitle>
@@ -744,8 +812,8 @@ export const InvoiceManager = ({ adminId, adminProfile }: InvoiceManagerProps) =
                         <tr key={index} className="border-t">
                           <td className="px-4 py-2">{item.service_name}</td>
                           <td className="px-4 py-2 text-right">{item.quantity}</td>
-                          <td className="px-4 py-2 text-right">${item.unit_price.toFixed(2)}</td>
-                          <td className="px-4 py-2 text-right">${item.total_price.toFixed(2)}</td>
+                          <td className="px-4 py-2 text-right">₹{item.unit_price.toFixed(2)}</td>
+                          <td className="px-4 py-2 text-right">₹{item.total_price.toFixed(2)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -755,26 +823,25 @@ export const InvoiceManager = ({ adminId, adminProfile }: InvoiceManagerProps) =
 
               <div className="border-t pt-4 space-y-2 text-right">
                 {selectedInvoice.discount > 0 && (
-                  <p>Discount: -${selectedInvoice.discount.toFixed(2)}</p>
+                  <p>Discount: -₹{selectedInvoice.discount.toFixed(2)}</p>
                 )}
-                <p className="text-lg font-bold">Total: ${selectedInvoice.total_amount.toFixed(2)}</p>
-                <p>Paid: ${selectedInvoice.amount_paid.toFixed(2)}</p>
+                <p className="text-lg font-bold">Total: ₹{selectedInvoice.total_amount.toFixed(2)}</p>
+                <p>Paid: ₹{selectedInvoice.amount_paid.toFixed(2)}</p>
                 <p className="font-semibold">
-                  Balance: ${(selectedInvoice.total_amount - selectedInvoice.amount_paid).toFixed(2)}
+                  Balance: ₹{(selectedInvoice.total_amount - selectedInvoice.amount_paid).toFixed(2)}
                 </p>
               </div>
 
               {selectedInvoice.upi_id && (
                 <div className="border-t pt-4">
                   <h4 className="font-semibold mb-2">Payment Details</h4>
-                  <p className="text-sm">UPI ID: {selectedInvoice.upi_id}</p>
-                </div>
-              )}
-
-              {selectedInvoice.upi_qr_url && (
-                <div className="border-t pt-4">
-                  <h4 className="font-semibold mb-2">QR Code</h4>
-                  <img src={selectedInvoice.upi_qr_url} alt="UPI QR Code" className="max-w-[200px]" />
+                  <p className="text-sm mb-4">UPI ID: {selectedInvoice.upi_id}</p>
+                  {viewQrCode && (selectedInvoice.total_amount - selectedInvoice.amount_paid) > 0 && (
+                    <div className="flex flex-col items-center">
+                      <img src={viewQrCode} alt="UPI Payment QR Code" className="max-w-[200px] border rounded-lg" />
+                      <p className="text-sm text-muted-foreground mt-2">Scan to pay ₹{(selectedInvoice.total_amount - selectedInvoice.amount_paid).toFixed(2)}</p>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -788,6 +855,24 @@ export const InvoiceManager = ({ adminId, adminProfile }: InvoiceManagerProps) =
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Invoice</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete invoice "{selectedInvoice?.invoice_number}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteInvoice} className="bg-destructive text-destructive-foreground">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 };
