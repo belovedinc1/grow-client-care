@@ -5,6 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
 import { 
   Users, 
   FolderKanban, 
@@ -17,9 +20,13 @@ import {
   Briefcase,
   Menu,
   Users2,
-  Receipt
+  Receipt,
+  LayoutDashboard,
+  Pencil,
+  Save
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ServicesManager } from "./ServicesManager";
 import { ClientsManager } from "./ClientsManager";
 import { InvoiceManager } from "./InvoiceManager";
@@ -44,6 +51,13 @@ const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
   });
   const [profile, setProfile] = useState<any>(null);
   const [projects, setProjects] = useState<any[]>([]);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    full_name: "",
+    email: "",
+    phone_number: "",
+  });
+  const { toast } = useToast();
 
   useEffect(() => {
     fetchProfile();
@@ -58,7 +72,44 @@ const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
       .eq("id", user.id)
       .single();
     setProfile(data);
+    if (data) {
+      setProfileForm({
+        full_name: data.full_name || "",
+        email: data.email || "",
+        phone_number: data.phone_number || "",
+      });
+    }
   };
+
+  const handleProfileUpdate = async () => {
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        full_name: profileForm.full_name,
+        phone_number: profileForm.phone_number,
+      })
+      .eq("id", user.id);
+
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    toast({ title: "Success", description: "Profile updated successfully" });
+    setIsEditingProfile(false);
+    fetchProfile();
+  };
+
+  const navItems = [
+    { value: "overview", icon: LayoutDashboard, label: "Overview" },
+    { value: "invoices", icon: FileText, label: "Invoices" },
+    { value: "requests", icon: MessageSquare, label: "Requests" },
+    { value: "projects", icon: FolderKanban, label: "Projects" },
+    { value: "services", icon: Briefcase, label: "Services" },
+    { value: "clients", icon: Users, label: "Clients" },
+    { value: "expenses", icon: Receipt, label: "Expenses" },
+    { value: "team", icon: Users2, label: "Team" },
+  ];
 
   const fetchStats = async () => {
     const [clientsRes, projectsRes, ratingsRes, invoicesRes, expensesRes] = await Promise.all([
@@ -129,66 +180,28 @@ const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
             {/* Logo */}
             <h1 className="text-xl font-bold text-primary hidden md:block">Client Care CRM</h1>
             
-            {/* Desktop Navigation */}
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="hidden md:block">
-              <TabsList className="bg-transparent border-0">
-                <TabsTrigger 
-                  value="overview" 
-                  className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
-                >
-                  Overview
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="invoices"
-                  className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
-                >
-                  <FileText className="h-4 w-4 mr-2" />
-                  Invoices
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="requests"
-                  className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
-                >
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  Requests
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="projects"
-                  className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
-                >
-                  <FolderKanban className="h-4 w-4 mr-2" />
-                  Projects
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="services"
-                  className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
-                >
-                  <Briefcase className="h-4 w-4 mr-2" />
-                  Services
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="clients"
-                  className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
-                >
-                  <Users className="h-4 w-4 mr-2" />
-                  Clients
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="expenses"
-                  className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
-                >
-                  <Receipt className="h-4 w-4 mr-2" />
-                  Expenses
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="team"
-                  className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
-                >
-                  <Users2 className="h-4 w-4 mr-2" />
-                  Team
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
+            {/* Desktop Navigation - Icons only with tooltips */}
+            <TooltipProvider delayDuration={0}>
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="hidden md:block">
+                <TabsList className="bg-transparent border-0 gap-1">
+                  {navItems.map((item) => (
+                    <Tooltip key={item.value}>
+                      <TooltipTrigger asChild>
+                        <TabsTrigger 
+                          value={item.value}
+                          className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary px-3"
+                        >
+                          <item.icon className="h-5 w-5" />
+                        </TabsTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        <p>{item.label}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  ))}
+                </TabsList>
+              </Tabs>
+            </TooltipProvider>
 
             {/* Profile & Mobile Menu */}
             <div className="flex items-center gap-2">
@@ -200,109 +213,101 @@ const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
                   </Button>
                 </SheetTrigger>
                 <SheetContent side="left">
-                  <div className="space-y-4 mt-8">
-                    <Button 
-                      variant="ghost" 
-                      className="w-full justify-start"
-                      onClick={() => { setActiveTab("overview"); }}
-                    >
-                      Overview
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      className="w-full justify-start"
-                      onClick={() => { setActiveTab("invoices"); }}
-                    >
-                      <FileText className="mr-2 h-4 w-4" />
-                      Invoices
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      className="w-full justify-start"
-                      onClick={() => { setActiveTab("requests"); }}
-                    >
-                      <MessageSquare className="mr-2 h-4 w-4" />
-                      Requests
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      className="w-full justify-start"
-                      onClick={() => { setActiveTab("projects"); }}
-                    >
-                      <FolderKanban className="mr-2 h-4 w-4" />
-                      Projects
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      className="w-full justify-start"
-                      onClick={() => { setActiveTab("services"); }}
-                    >
-                      <Briefcase className="mr-2 h-4 w-4" />
-                      Services
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      className="w-full justify-start"
-                      onClick={() => { setActiveTab("clients"); }}
-                    >
-                      <Users className="mr-2 h-4 w-4" />
-                      Clients
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      className="w-full justify-start"
-                      onClick={() => { setActiveTab("expenses"); }}
-                    >
-                      <Receipt className="mr-2 h-4 w-4" />
-                      Expenses
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      className="w-full justify-start"
-                      onClick={() => { setActiveTab("team"); }}
-                    >
-                      <Users2 className="mr-2 h-4 w-4" />
-                      Team
-                    </Button>
+                  <div className="space-y-2 mt-8">
+                    {navItems.map((item) => (
+                      <Button 
+                        key={item.value}
+                        variant={activeTab === item.value ? "secondary" : "ghost"}
+                        className="w-full justify-start"
+                        onClick={() => setActiveTab(item.value)}
+                      >
+                        <item.icon className="mr-2 h-4 w-4" />
+                        {item.label}
+                      </Button>
+                    ))}
                   </div>
                 </SheetContent>
               </Sheet>
 
-              {/* Profile Dropdown */}
+              {/* Profile Avatar */}
               <Sheet>
                 <SheetTrigger asChild>
-                  <Button variant="ghost" className="flex items-center gap-2">
-                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                      <span className="text-sm font-medium text-primary">
-                        {profile?.full_name?.charAt(0) || "A"}
+                  <Button variant="ghost" size="icon" className="rounded-full">
+                    <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center border-2 border-primary/20">
+                      <span className="text-sm font-semibold text-primary">
+                        {profile?.full_name?.charAt(0)?.toUpperCase() || "A"}
                       </span>
-                    </div>
-                    <div className="text-left hidden lg:block">
-                      <p className="text-sm font-medium">{profile?.full_name || "Admin"}</p>
-                      <p className="text-xs text-muted-foreground">{profile?.email}</p>
                     </div>
                   </Button>
                 </SheetTrigger>
                 <SheetContent side="right" className="w-80">
                   <div className="space-y-6 mt-8">
-                    <div className="flex items-center gap-4">
-                      <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-                        <span className="text-2xl font-medium text-primary">
-                          {profile?.full_name?.charAt(0) || "A"}
+                    <div className="text-center">
+                      <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto border-2 border-primary/20">
+                        <span className="text-3xl font-semibold text-primary">
+                          {profile?.full_name?.charAt(0)?.toUpperCase() || "A"}
                         </span>
                       </div>
-                      <div>
-                        <p className="font-semibold">{profile?.full_name || "Admin"}</p>
-                        <p className="text-sm text-muted-foreground">{profile?.email}</p>
-                        <p className="text-xs text-muted-foreground">{profile?.phone_number}</p>
+                      {!isEditingProfile ? (
+                        <div className="mt-4">
+                          <p className="font-semibold text-lg">{profile?.full_name || "Admin"}</p>
+                          <p className="text-sm text-muted-foreground">{profile?.email}</p>
+                          <p className="text-xs text-muted-foreground">{profile?.phone_number}</p>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    {isEditingProfile ? (
+                      <div className="space-y-4">
+                        <div>
+                          <Label htmlFor="full_name">Full Name</Label>
+                          <Input
+                            id="full_name"
+                            value={profileForm.full_name}
+                            onChange={(e) => setProfileForm({ ...profileForm, full_name: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="email">Email</Label>
+                          <Input
+                            id="email"
+                            value={profileForm.email}
+                            disabled
+                            className="bg-muted"
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">Email cannot be changed</p>
+                        </div>
+                        <div>
+                          <Label htmlFor="phone">Phone Number</Label>
+                          <Input
+                            id="phone"
+                            value={profileForm.phone_number}
+                            onChange={(e) => setProfileForm({ ...profileForm, phone_number: e.target.value })}
+                            placeholder="+91 9876543210"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button onClick={handleProfileUpdate} className="flex-1">
+                            <Save className="mr-2 h-4 w-4" />
+                            Save
+                          </Button>
+                          <Button variant="outline" onClick={() => setIsEditingProfile(false)}>
+                            Cancel
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                    <div className="border-t pt-4 space-y-2">
-                      <Button variant="ghost" className="w-full justify-start" onClick={onLogout}>
-                        <LogOut className="mr-2 h-4 w-4" />
-                        Logout
-                      </Button>
-                    </div>
+                    ) : (
+                      <div className="space-y-2 border-t pt-4">
+                        <Button variant="ghost" className="w-full justify-start" onClick={() => setIsEditingProfile(true)}>
+                          <Pencil className="mr-2 h-4 w-4" />
+                          Edit Profile
+                        </Button>
+                        <Button variant="ghost" className="w-full justify-start text-destructive hover:text-destructive" onClick={onLogout}>
+                          <LogOut className="mr-2 h-4 w-4" />
+                          Logout
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </SheetContent>
               </Sheet>
