@@ -50,6 +50,45 @@ export type Database = {
           },
         ]
       }
+      expenses: {
+        Row: {
+          admin_id: string
+          amount: number
+          category: Database["public"]["Enums"]["expense_category"]
+          created_at: string
+          description: string
+          expense_date: string
+          id: string
+          notes: string | null
+          receipt_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          admin_id: string
+          amount: number
+          category?: Database["public"]["Enums"]["expense_category"]
+          created_at?: string
+          description: string
+          expense_date?: string
+          id?: string
+          notes?: string | null
+          receipt_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          admin_id?: string
+          amount?: number
+          category?: Database["public"]["Enums"]["expense_category"]
+          created_at?: string
+          description?: string
+          expense_date?: string
+          id?: string
+          notes?: string | null
+          receipt_url?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       invoice_items: {
         Row: {
           created_at: string
@@ -181,6 +220,60 @@ export type Database = {
           phone_number?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
+        }
+        Relationships: []
+      }
+      project_files: {
+        Row: {
+          admin_id: string
+          file_name: string
+          file_size: number | null
+          file_type: string | null
+          file_url: string
+          id: string
+          project_id: string
+          uploaded_at: string
+        }
+        Insert: {
+          admin_id: string
+          file_name: string
+          file_size?: number | null
+          file_type?: string | null
+          file_url: string
+          id?: string
+          project_id: string
+          uploaded_at?: string
+        }
+        Update: {
+          admin_id?: string
+          file_name?: string
+          file_size?: number | null
+          file_type?: string | null
+          file_url?: string
+          id?: string
+          project_id?: string
+          uploaded_at?: string
+        }
+        Relationships: []
+      }
+      project_team_members: {
+        Row: {
+          assigned_at: string
+          id: string
+          project_id: string
+          team_member_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          id?: string
+          project_id: string
+          team_member_id: string
+        }
+        Update: {
+          assigned_at?: string
+          id?: string
+          project_id?: string
+          team_member_id?: string
         }
         Relationships: []
       }
@@ -382,6 +475,45 @@ export type Database = {
           },
         ]
       }
+      team_members: {
+        Row: {
+          admin_id: string
+          avatar_url: string | null
+          created_at: string
+          email: string
+          id: string
+          is_active: boolean
+          name: string
+          phone: string | null
+          role: string
+          updated_at: string
+        }
+        Insert: {
+          admin_id: string
+          avatar_url?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          is_active?: boolean
+          name: string
+          phone?: string | null
+          role?: string
+          updated_at?: string
+        }
+        Update: {
+          admin_id?: string
+          avatar_url?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          phone?: string | null
+          role?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -390,6 +522,15 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
+      expense_category:
+        | "software"
+        | "hardware"
+        | "travel"
+        | "marketing"
+        | "office"
+        | "salary"
+        | "utilities"
+        | "other"
       project_status: "active" | "completed" | "on_hold" | "cancelled"
       service_request_status:
         | "pending"
@@ -524,6 +665,16 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      expense_category: [
+        "software",
+        "hardware",
+        "travel",
+        "marketing",
+        "office",
+        "salary",
+        "utilities",
+        "other",
+      ],
       project_status: ["active", "completed", "on_hold", "cancelled"],
       service_request_status: [
         "pending",

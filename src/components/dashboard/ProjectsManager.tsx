@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, FolderKanban } from "lucide-react";
+import { Plus, Pencil, Trash2, FolderKanban, Upload, FileIcon, X, Users2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -38,6 +39,21 @@ interface ClientProfile {
   full_name: string;
 }
 
+interface TeamMember {
+  id: string;
+  name: string;
+  role: string;
+}
+
+interface ProjectFile {
+  id: string;
+  file_name: string;
+  file_url: string;
+  file_type: string | null;
+  file_size: number | null;
+  uploaded_at: string;
+}
+
 interface Project {
   id: string;
   name: string;
@@ -56,10 +72,17 @@ interface ProjectsManagerProps {
 export const ProjectsManager = ({ adminId }: ProjectsManagerProps) => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [clients, setClients] = useState<ClientProfile[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isFilesDialogOpen, setIsFilesDialogOpen] = useState(false);
+  const [isTeamDialogOpen, setIsTeamDialogOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [projectFiles, setProjectFiles] = useState<ProjectFile[]>([]);
+  const [projectTeamMembers, setProjectTeamMembers] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -73,6 +96,7 @@ export const ProjectsManager = ({ adminId }: ProjectsManagerProps) => {
   useEffect(() => {
     fetchProjects();
     fetchClients();
+    fetchTeamMembers();
   }, [adminId]);
 
   const fetchProjects = async () => {
@@ -101,6 +125,129 @@ export const ProjectsManager = ({ adminId }: ProjectsManagerProps) => {
       .map(item => item.profiles as unknown as ClientProfile) || [];
     
     setClients(clientProfiles);
+  };
+
+  const fetchTeamMembers = async () => {
+    const { data } = await supabase
+      .from("team_members")
+      .select("id, name, role")
+      .eq("admin_id", adminId)
+      .eq("is_active", true);
+    setTeamMembers(data || []);
+  };
+
+  const fetchProjectFiles = async (projectId: string) => {
+    const { data } = await supabase
+      .from("project_files")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("uploaded_at", { ascending: false });
+    setProjectFiles(data || []);
+  };
+
+  const fetchProjectTeamMembers = async (projectId: string) => {
+    const { data } = await supabase
+      .from("project_team_members")
+      .select("team_member_id")
+      .eq("project_id", projectId);
+    setProjectTeamMembers(data?.map(d => d.team_member_id) || []);
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || !selectedProject) return;
+    
+    setUploading(true);
+    const file = e.target.files[0];
+    const filePath = `${adminId}/${selectedProject.id}/${Date.now()}_${file.name}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("project-files")
+      .upload(filePath, file);
+
+    if (uploadError) {
+      toast({ title: "Upload failed", description: uploadError.message, variant: "destructive" });
+      setUploading(false);
+      return;
+    }
+
+    const { data: urlData } = supabase.storage
+      .from("project-files")
+      .getPublicUrl(filePath);
+
+    const { error: dbError } = await supabase.from("project_files").insert({
+      project_id: selectedProject.id,
+      admin_id: adminId,
+      file_name: file.name,
+      file_url: urlData.publicUrl,
+      file_type: file.type,
+      file_size: file.size,
+    });
+
+    if (dbError) {
+      toast({ title: "Error", description: dbError.message, variant: "destructive" });
+    } else {
+      toast({ title: "Success", description: "File uploaded successfully" });
+      fetchProjectFiles(selectedProject.id);
+    }
+    
+    setUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleDeleteFile = async (fileId: string, fileUrl: string) => {
+    const filePath = fileUrl.split("/project-files/")[1];
+    
+    if (filePath) {
+      await supabase.storage.from("project-files").remove([decodeURIComponent(filePath)]);
+    }
+
+    const { error } = await supabase.from("project_files").delete().eq("id", fileId);
+    
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Success", description: "File deleted" });
+      if (selectedProject) fetchProjectFiles(selectedProject.id);
+    }
+  };
+
+  const handleTeamAssignment = async (memberId: string, isAssigned: boolean) => {
+    if (!selectedProject) return;
+
+    if (isAssigned) {
+      const { error } = await supabase.from("project_team_members").insert({
+        project_id: selectedProject.id,
+        team_member_id: memberId,
+      });
+      if (error) {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
+        return;
+      }
+    } else {
+      const { error } = await supabase
+        .from("project_team_members")
+        .delete()
+        .eq("project_id", selectedProject.id)
+        .eq("team_member_id", memberId);
+      if (error) {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
+        return;
+      }
+    }
+
+    fetchProjectTeamMembers(selectedProject.id);
+  };
+
+  const openFilesDialog = async (project: Project) => {
+    setSelectedProject(project);
+    await fetchProjectFiles(project.id);
+    setIsFilesDialogOpen(true);
+  };
+
+  const openTeamDialog = async (project: Project) => {
+    setSelectedProject(project);
+    await fetchProjectTeamMembers(project.id);
+    setIsTeamDialogOpen(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -333,6 +480,12 @@ export const ProjectsManager = ({ adminId }: ProjectsManagerProps) => {
                     )}
                   </div>
                   <div className="flex gap-2">
+                    <Button variant="ghost" size="icon" onClick={() => openFilesDialog(project)} title="Files">
+                      <Upload className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => openTeamDialog(project)} title="Team">
+                      <Users2 className="h-4 w-4" />
+                    </Button>
                     <Button variant="ghost" size="icon" onClick={() => handleEdit(project)}>
                       <Pencil className="h-4 w-4" />
                     </Button>
@@ -378,6 +531,94 @@ export const ProjectsManager = ({ adminId }: ProjectsManagerProps) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Files Dialog */}
+      <Dialog open={isFilesDialogOpen} onOpenChange={setIsFilesDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Project Files: {selectedProject?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+              <Button 
+                onClick={() => fileInputRef.current?.click()} 
+                disabled={uploading}
+                className="w-full"
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                {uploading ? "Uploading..." : "Upload File"}
+              </Button>
+            </div>
+            
+            {projectFiles.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4">No files uploaded yet.</p>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {projectFiles.map((file) => (
+                  <div key={file.id} className="flex items-center justify-between border rounded p-2">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <FileIcon className="h-4 w-4 shrink-0 text-primary" />
+                      <a 
+                        href={file.file_url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-sm truncate hover:underline"
+                      >
+                        {file.file_name}
+                      </a>
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => handleDeleteFile(file.id, file.file_url)}
+                    >
+                      <X className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Team Assignment Dialog */}
+      <Dialog open={isTeamDialogOpen} onOpenChange={setIsTeamDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assign Team: {selectedProject?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {teamMembers.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4">
+                No team members available. Add team members first.
+              </p>
+            ) : (
+              <div className="space-y-3 max-h-64 overflow-y-auto">
+                {teamMembers.map((member) => (
+                  <div key={member.id} className="flex items-center space-x-3 border rounded p-3">
+                    <Checkbox
+                      id={member.id}
+                      checked={projectTeamMembers.includes(member.id)}
+                      onCheckedChange={(checked) => handleTeamAssignment(member.id, checked as boolean)}
+                    />
+                    <label htmlFor={member.id} className="flex-1 cursor-pointer">
+                      <p className="font-medium">{member.name}</p>
+                      <p className="text-xs text-muted-foreground">{member.role}</p>
+                    </label>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 };
