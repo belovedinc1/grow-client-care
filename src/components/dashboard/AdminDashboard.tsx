@@ -10,12 +10,14 @@ import {
   FolderKanban, 
   Star, 
   DollarSign, 
-  TrendingUp,
+  TrendingDown,
   LogOut,
   FileText,
   MessageSquare,
   Briefcase,
-  Menu
+  Menu,
+  Users2,
+  Receipt
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ServicesManager } from "./ServicesManager";
@@ -23,6 +25,8 @@ import { ClientsManager } from "./ClientsManager";
 import { InvoiceManager } from "./InvoiceManager";
 import { ServiceRequestsManager } from "./ServiceRequestsManager";
 import { ProjectsManager } from "./ProjectsManager";
+import { ExpenseManager } from "./ExpenseManager";
+import { TeamManager } from "./TeamManager";
 
 interface AdminDashboardProps {
   user: User;
@@ -57,11 +61,12 @@ const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
   };
 
   const fetchStats = async () => {
-    const [clientsRes, projectsRes, ratingsRes, invoicesRes] = await Promise.all([
+    const [clientsRes, projectsRes, ratingsRes, invoicesRes, expensesRes] = await Promise.all([
       supabase.from("clients").select("*", { count: "exact" }).eq("admin_id", user.id),
       supabase.from("projects").select("*", { count: "exact" }).eq("admin_id", user.id).eq("status", "active"),
       supabase.from("satisfaction_ratings").select("rating").eq("admin_id", user.id),
       supabase.from("invoices").select("total_amount, amount_paid").eq("admin_id", user.id),
+      supabase.from("expenses").select("amount").eq("admin_id", user.id),
     ]);
 
     const avgRating = ratingsRes.data?.length 
@@ -69,7 +74,7 @@ const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
       : 0;
 
     const totalIncome = invoicesRes.data?.reduce((acc, inv) => acc + Number(inv.amount_paid), 0) || 0;
-    const totalExpenses = 0;
+    const totalExpenses = expensesRes.data?.reduce((acc, exp) => acc + Number(exp.amount), 0) || 0;
 
     setStats({
       activeClients: clientsRes.count || 0,
@@ -107,7 +112,6 @@ const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
         <div className="text-3xl font-bold">{value}</div>
         {trend && (
           <p className="text-xs text-muted-foreground mt-1">
-            <TrendingUp className="inline h-3 w-3 mr-1" />
             {trend}
           </p>
         )}
@@ -169,6 +173,20 @@ const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
                   <Users className="h-4 w-4 mr-2" />
                   Clients
                 </TabsTrigger>
+                <TabsTrigger 
+                  value="expenses"
+                  className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                >
+                  <Receipt className="h-4 w-4 mr-2" />
+                  Expenses
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="team"
+                  className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                >
+                  <Users2 className="h-4 w-4 mr-2" />
+                  Team
+                </TabsTrigger>
               </TabsList>
             </Tabs>
 
@@ -229,6 +247,22 @@ const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
                     >
                       <Users className="mr-2 h-4 w-4" />
                       Clients
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      className="w-full justify-start"
+                      onClick={() => { setActiveTab("expenses"); }}
+                    >
+                      <Receipt className="mr-2 h-4 w-4" />
+                      Expenses
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      className="w-full justify-start"
+                      onClick={() => { setActiveTab("team"); }}
+                    >
+                      <Users2 className="mr-2 h-4 w-4" />
+                      Team
                     </Button>
                   </div>
                 </SheetContent>
@@ -300,14 +334,14 @@ const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
           />
           <StatCard
             title="Total Income"
-            value={`$${stats.totalIncome.toLocaleString()}`}
+            value={`₹${stats.totalIncome.toLocaleString()}`}
             icon={DollarSign}
             trend="+12% from last month"
           />
           <StatCard
             title="Total Expenses"
-            value={`$${stats.totalExpenses.toLocaleString()}`}
-            icon={TrendingUp}
+            value={`₹${stats.totalExpenses.toLocaleString()}`}
+            icon={TrendingDown}
           />
         </div>
 
@@ -382,6 +416,14 @@ const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
 
           <TabsContent value="clients">
             <ClientsManager adminId={user.id} />
+          </TabsContent>
+
+          <TabsContent value="expenses">
+            <ExpenseManager adminId={user.id} />
+          </TabsContent>
+
+          <TabsContent value="team">
+            <TeamManager adminId={user.id} />
           </TabsContent>
         </Tabs>
       </main>
