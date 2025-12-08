@@ -6,6 +6,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, User, Mail, Phone, Pencil, Trash2 } from "lucide-react";
+import { z } from "zod";
+
+// SECURITY FIX: Add input validation schema
+const clientSchema = z.object({
+  email: z.string().email("Invalid email address").max(255, "Email must be less than 255 characters"),
+  full_name: z.string().trim().min(2, "Name must be at least 2 characters").max(100, "Name must be less than 100 characters"),
+  phone_number: z.string().regex(/^\+?[0-9]{10,15}$/, "Phone must be 10-15 digits").optional().or(z.literal('')),
+  password: z.string().min(8, "Password must be at least 8 characters").max(72, "Password must be less than 72 characters"),
+});
+
+const editClientSchema = z.object({
+  full_name: z.string().trim().min(2, "Name must be at least 2 characters").max(100, "Name must be less than 100 characters"),
+  phone_number: z.string().regex(/^\+?[0-9]{10,15}$/, "Phone must be 10-15 digits").optional().or(z.literal('')),
+});
 import {
   Dialog,
   DialogContent,
@@ -109,14 +123,29 @@ export const ClientsManager = ({ adminId }: ClientsManagerProps) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // SECURITY FIX: Validate input before submission
+    try {
+      clientSchema.parse(formData);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast({
+          title: "Validation Error",
+          description: error.errors[0].message,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     // Create client user account
+    // SECURITY FIX: Never pass role in metadata - trigger handles it securely
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: formData.email,
       password: formData.password,
       options: {
         data: {
           full_name: formData.full_name,
-          role: "client",
+          // NOTE: role is NOT passed - database trigger assigns 'client' by default
         },
       },
     });
@@ -169,6 +198,20 @@ export const ClientsManager = ({ adminId }: ClientsManagerProps) => {
   const handleUpdateClient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedClient) return;
+
+    // SECURITY FIX: Validate edit input
+    try {
+      editClientSchema.parse(editFormData);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast({
+          title: "Validation Error",
+          description: error.errors[0].message,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
 
     const { error } = await supabase
       .from("profiles")
