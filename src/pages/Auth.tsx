@@ -121,6 +121,9 @@ const Auth = () => {
     setLoading(true);
 
     try {
+      // SECURITY FIX: Never pass user-supplied role to auth metadata
+      // Role assignment is handled securely by the database trigger
+      // All new users are automatically assigned 'client' role
       const { data, error } = await supabase.auth.signUp({
         email: signupForm.email,
         password: signupForm.password,
@@ -129,7 +132,9 @@ const Auth = () => {
           data: {
             full_name: signupForm.fullName,
             phone_number: signupForm.phone,
-            role: signupForm.role,
+            // NOTE: role is intentionally NOT passed here
+            // The database trigger assigns 'client' role by default
+            // Admin roles must be assigned through a secure admin process
           },
         },
       });
@@ -282,23 +287,12 @@ const Auth = () => {
                     required
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-role">I am a</Label>
-                  <select
-                    id="signup-role"
-                    value={signupForm.role}
-                    onChange={(e) =>
-                      setSignupForm({
-                        ...signupForm,
-                        role: e.target.value as "admin" | "client",
-                      })
-                    }
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <option value="client">Client</option>
-                    <option value="admin">Service Provider</option>
-                  </select>
-                </div>
+                {/* SECURITY FIX: Role selection removed from signup form
+                    All users are registered as 'client' by default.
+                    Admin roles must be assigned through a secure admin process */}
+                <p className="text-sm text-muted-foreground">
+                  You will be registered as a client. Contact an administrator if you need elevated access.
+                </p>
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? (
                     <>

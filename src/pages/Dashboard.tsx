@@ -34,14 +34,28 @@ const Dashboard = () => {
       setSession(session);
       setUser(session.user);
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", session.user.id)
-        .single();
+      // SECURITY FIX: Fetch role from secure user_roles table instead of profiles
+      // The get_user_role function is SECURITY DEFINER and bypasses RLS safely
+      const { data: roleData, error: roleError } = await supabase
+        .rpc('get_user_role', { _user_id: session.user.id });
 
-      if (profile) {
-        setUserRole(profile.role as "admin" | "client");
+      if (roleError) {
+        console.error("Error fetching user role:", roleError);
+        // Fallback: try to get role from profiles (for backward compatibility during migration)
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", session.user.id)
+          .single();
+
+        if (profile) {
+          setUserRole(profile.role as "admin" | "client");
+        }
+      } else if (roleData) {
+        setUserRole(roleData as "admin" | "client");
+      } else {
+        // Default to client if no role found
+        setUserRole("client");
       }
       
       setLoading(false);
