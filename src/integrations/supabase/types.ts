@@ -50,68 +50,6 @@ export type Database = {
           },
         ]
       }
-      companies: {
-        Row: {
-          created_at: string
-          id: string
-          name: string
-          slug: string | null
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          name: string
-          slug?: string | null
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          name?: string
-          slug?: string | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      company_members: {
-        Row: {
-          company_id: string
-          created_at: string
-          email: string | null
-          full_name: string | null
-          id: string
-          role: Database["public"]["Enums"]["company_role"]
-          user_id: string
-        }
-        Insert: {
-          company_id: string
-          created_at?: string
-          email?: string | null
-          full_name?: string | null
-          id?: string
-          role?: Database["public"]["Enums"]["company_role"]
-          user_id: string
-        }
-        Update: {
-          company_id?: string
-          created_at?: string
-          email?: string | null
-          full_name?: string | null
-          id?: string
-          role?: Database["public"]["Enums"]["company_role"]
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "company_members_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "companies"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       expenses: {
         Row: {
           admin_id: string
@@ -150,53 +88,6 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
-      }
-      invites: {
-        Row: {
-          accepted_at: string | null
-          company_id: string
-          created_at: string
-          email: string
-          expires_at: string
-          id: string
-          invited_by: string
-          role: Database["public"]["Enums"]["company_role"]
-          status: Database["public"]["Enums"]["invite_status"]
-          token: string
-        }
-        Insert: {
-          accepted_at?: string | null
-          company_id: string
-          created_at?: string
-          email: string
-          expires_at?: string
-          id?: string
-          invited_by: string
-          role?: Database["public"]["Enums"]["company_role"]
-          status?: Database["public"]["Enums"]["invite_status"]
-          token?: string
-        }
-        Update: {
-          accepted_at?: string | null
-          company_id?: string
-          created_at?: string
-          email?: string
-          expires_at?: string
-          id?: string
-          invited_by?: string
-          role?: Database["public"]["Enums"]["company_role"]
-          status?: Database["public"]["Enums"]["invite_status"]
-          token?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "invites_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "companies"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       invoice_items: {
         Row: {
@@ -623,100 +514,6 @@ export type Database = {
         }
         Relationships: []
       }
-      ticket_messages: {
-        Row: {
-          created_at: string
-          email_message_id: string | null
-          id: string
-          is_internal_note: boolean
-          message: string
-          sender_email: string | null
-          sender_id: string | null
-          sender_name: string | null
-          ticket_id: string
-        }
-        Insert: {
-          created_at?: string
-          email_message_id?: string | null
-          id?: string
-          is_internal_note?: boolean
-          message: string
-          sender_email?: string | null
-          sender_id?: string | null
-          sender_name?: string | null
-          ticket_id: string
-        }
-        Update: {
-          created_at?: string
-          email_message_id?: string | null
-          id?: string
-          is_internal_note?: boolean
-          message?: string
-          sender_email?: string | null
-          sender_id?: string | null
-          sender_name?: string | null
-          ticket_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ticket_messages_ticket_id_fkey"
-            columns: ["ticket_id"]
-            isOneToOne: false
-            referencedRelation: "tickets"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      tickets: {
-        Row: {
-          assigned_to: string | null
-          company_id: string
-          created_at: string
-          created_by: string
-          description: string | null
-          id: string
-          priority: Database["public"]["Enums"]["ticket_priority"]
-          status: Database["public"]["Enums"]["ticket_status"]
-          subject: string
-          ticket_number: string
-          updated_at: string
-        }
-        Insert: {
-          assigned_to?: string | null
-          company_id: string
-          created_at?: string
-          created_by: string
-          description?: string | null
-          id?: string
-          priority?: Database["public"]["Enums"]["ticket_priority"]
-          status?: Database["public"]["Enums"]["ticket_status"]
-          subject: string
-          ticket_number: string
-          updated_at?: string
-        }
-        Update: {
-          assigned_to?: string | null
-          company_id?: string
-          created_at?: string
-          created_by?: string
-          description?: string | null
-          id?: string
-          priority?: Database["public"]["Enums"]["ticket_priority"]
-          status?: Database["public"]["Enums"]["ticket_status"]
-          subject?: string
-          ticket_number?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "tickets_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "companies"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       user_roles: {
         Row: {
           created_at: string
@@ -766,42 +563,9 @@ export type Database = {
       }
     }
     Functions: {
-      accept_invite: {
-        Args: { _full_name: string; _token: string }
-        Returns: string
-      }
-      create_company_with_admin: {
-        Args: { _admin_full_name: string; _company_name: string }
-        Returns: string
-      }
-      get_invite_by_token: {
-        Args: { _token: string }
-        Returns: {
-          company_id: string
-          company_name: string
-          email: string
-          expires_at: string
-          id: string
-          role: Database["public"]["Enums"]["company_role"]
-          status: Database["public"]["Enums"]["invite_status"]
-        }[]
-      }
-      get_user_company_ids: { Args: { _user_id: string }; Returns: string[] }
-      get_user_company_role: {
-        Args: { _company_id: string; _user_id: string }
-        Returns: Database["public"]["Enums"]["company_role"]
-      }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["user_role"]
-      }
-      has_company_role: {
-        Args: {
-          _company_id: string
-          _role: Database["public"]["Enums"]["company_role"]
-          _user_id: string
-        }
-        Returns: boolean
       }
       has_role: {
         Args: {
@@ -810,13 +574,8 @@ export type Database = {
         }
         Returns: boolean
       }
-      is_company_member: {
-        Args: { _company_id: string; _user_id: string }
-        Returns: boolean
-      }
     }
     Enums: {
-      company_role: "admin" | "agent" | "client"
       expense_category:
         | "software"
         | "hardware"
@@ -826,15 +585,12 @@ export type Database = {
         | "salary"
         | "utilities"
         | "other"
-      invite_status: "pending" | "accepted" | "cancelled" | "expired"
       project_status: "active" | "completed" | "on_hold" | "cancelled"
       service_request_status:
         | "pending"
         | "in_progress"
         | "completed"
         | "rejected"
-      ticket_priority: "low" | "normal" | "high" | "urgent"
-      ticket_status: "open" | "pending" | "closed"
       user_role: "admin" | "client"
     }
     CompositeTypes: {
@@ -963,7 +719,6 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      company_role: ["admin", "agent", "client"],
       expense_category: [
         "software",
         "hardware",
@@ -974,7 +729,6 @@ export const Constants = {
         "utilities",
         "other",
       ],
-      invite_status: ["pending", "accepted", "cancelled", "expired"],
       project_status: ["active", "completed", "on_hold", "cancelled"],
       service_request_status: [
         "pending",
@@ -982,8 +736,6 @@ export const Constants = {
         "completed",
         "rejected",
       ],
-      ticket_priority: ["low", "normal", "high", "urgent"],
-      ticket_status: ["open", "pending", "closed"],
       user_role: ["admin", "client"],
     },
   },

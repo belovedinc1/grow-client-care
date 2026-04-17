@@ -25,10 +25,9 @@ const Index = () => {
           <Building2 className="h-8 w-8 text-primary" />
           <span className="text-2xl font-bold">Client Care CRM</span>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={() => navigate("/auth")} variant="outline">Login</Button>
-          <Button onClick={() => navigate("/auth")}>Create Company</Button>
-        </div>
+        <Button onClick={() => navigate("/auth")} variant="outline">
+          Login
+        </Button>
       </header>
 
       {/* Hero Section */}

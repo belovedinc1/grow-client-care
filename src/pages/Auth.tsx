@@ -4,24 +4,22 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Card, CardContent, CardDescription, CardHeader, CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Building2 } from "lucide-react";
 import { z } from "zod";
 
 const signupSchema = z.object({
-  companyName: z.string().trim().min(2, "Company name min 2 chars").max(100),
-  fullName: z.string().trim().min(2, "Name min 2 chars").max(100),
-  email: z.string().trim().email().max(255),
-  password: z.string().min(8, "Password min 8 chars").max(72),
+  fullName: z.string().min(2, "Name must be at least 2 characters"),
+  email: z.string().email("Invalid email address"),
+  phone: z.string().min(10, "Phone number must be at least 10 digits"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
 const loginSchema = z.object({
-  email: z.string().trim().email().max(255),
-  password: z.string().min(8).max(72),
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
 const Auth = () => {
@@ -32,44 +30,73 @@ const Auth = () => {
 
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
   const [signupForm, setSignupForm] = useState({
-    companyName: "",
     fullName: "",
     email: "",
+    phone: "",
     password: "",
+    role: "client" as "admin" | "client",
   });
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) navigate("/dashboard");
-    });
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        navigate("/dashboard");
+      }
+    };
+    checkUser();
   }, [navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const parsed = loginSchema.safeParse(loginForm);
-    if (!parsed.success) {
-      toast({
-        title: "Validation",
-        description: parsed.error.errors[0].message,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setLoading(true);
+    
     try {
-      const { data, error } = await supabase.auth.signInWithPassword(loginForm);
-      if (error) {
+      loginSchema.parse(loginForm);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
         toast({
-          title: "Login failed",
-          description: error.message.includes("Invalid")
-            ? "Invalid email or password"
-            : error.message,
+          title: "Validation Error",
+          description: error.errors[0].message,
           variant: "destructive",
         });
         return;
       }
-      if (data.session) navigate("/dashboard");
+    }
+
+    setLoading(true);
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: loginForm.email,
+        password: loginForm.password,
+      });
+
+      if (error) {
+        if (error.message.includes("Invalid login credentials")) {
+          toast({
+            title: "Login Failed",
+            description: "Invalid email or password. Please try again.",
+            variant: "destructive",
+          });
+        } else {
+          throw error;
+        }
+        return;
+      }
+
+      if (data.session) {
+        toast({
+          title: "Welcome back!",
+          description: "You have successfully logged in.",
+        });
+        navigate("/dashboard");
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "An unexpected error occurred",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -77,77 +104,68 @@ const Auth = () => {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    const parsed = signupSchema.safeParse(signupForm);
-    if (!parsed.success) {
-      toast({
-        title: "Validation",
-        description: parsed.error.errors[0].message,
-        variant: "destructive",
-      });
-      return;
+    
+    try {
+      signupSchema.parse(signupForm);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast({
+          title: "Validation Error",
+          description: error.errors[0].message,
+          variant: "destructive",
+        });
+        return;
+      }
     }
 
     setLoading(true);
+
     try {
-      // 1. Create auth user
-      const signUp = await supabase.auth.signUp({
+      // SECURITY FIX: Never pass user-supplied role to auth metadata
+      // Role assignment is handled securely by the database trigger
+      // All new users are automatically assigned 'client' role
+      const { data, error } = await supabase.auth.signUp({
         email: signupForm.email,
         password: signupForm.password,
         options: {
           emailRedirectTo: `${window.location.origin}/dashboard`,
-          data: { full_name: signupForm.fullName },
+          data: {
+            full_name: signupForm.fullName,
+            phone_number: signupForm.phone,
+            // NOTE: role is intentionally NOT passed here
+            // The database trigger assigns 'client' role by default
+            // Admin roles must be assigned through a secure admin process
+          },
         },
       });
 
-      if (signUp.error) {
-        toast({
-          title: "Signup failed",
-          description: signUp.error.message.includes("registered")
-            ? "Email already registered. Please login."
-            : signUp.error.message,
-          variant: "destructive",
-        });
+      if (error) {
+        if (error.message.includes("already registered")) {
+          toast({
+            title: "Account Exists",
+            description: "This email is already registered. Please login instead.",
+            variant: "destructive",
+          });
+        } else {
+          throw error;
+        }
         return;
       }
 
-      // 2. Ensure session (sign in if email confirmation required)
-      let session = signUp.data.session;
-      if (!session) {
-        const signIn = await supabase.auth.signInWithPassword({
-          email: signupForm.email,
-          password: signupForm.password,
-        });
-        session = signIn.data.session;
-      }
-
-      if (!session) {
+      if (data.user) {
         toast({
-          title: "Confirm your email",
-          description: "Check your inbox to verify, then login to create your company.",
+          title: "Account Created!",
+          description: "Please check your email to verify your account.",
         });
         setTab("login");
-        return;
+        setLoginForm({ email: signupForm.email, password: "" });
       }
-
-      // 3. Create company + admin membership
-      const { error: rpcErr } = await supabase.rpc("create_company_with_admin", {
-        _company_name: signupForm.companyName,
-        _admin_full_name: signupForm.fullName,
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "An unexpected error occurred",
+        variant: "destructive",
       });
-
-      if (rpcErr) {
-        toast({
-          title: "Could not create company",
-          description: rpcErr.message,
-          variant: "destructive",
-        });
-        return;
-      }
-
-      toast({ title: "Welcome!", description: `${signupForm.companyName} is ready.` });
-      navigate("/dashboard");
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message ?? "Unknown", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -163,13 +181,15 @@ const Auth = () => {
             </div>
           </div>
           <CardTitle className="text-3xl font-bold">Client Care CRM</CardTitle>
-          <CardDescription>Multi-tenant support ticketing</CardDescription>
+          <CardDescription>
+            Manage your clients and projects efficiently
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
+          <Tabs value={tab} onValueChange={(v) => setTab(v as "login" | "signup")}>
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="login">Login</TabsTrigger>
-              <TabsTrigger value="signup">Create Company</TabsTrigger>
+              <TabsTrigger value="signup">Sign Up</TabsTrigger>
             </TabsList>
 
             <TabsContent value="login">
@@ -179,8 +199,11 @@ const Auth = () => {
                   <Input
                     id="login-email"
                     type="email"
+                    placeholder="you@example.com"
                     value={loginForm.email}
-                    onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
+                    onChange={(e) =>
+                      setLoginForm({ ...loginForm, email: e.target.value })
+                    }
                     required
                   />
                 </div>
@@ -189,37 +212,39 @@ const Auth = () => {
                   <Input
                     id="login-password"
                     type="password"
+                    placeholder="••••••••"
                     value={loginForm.password}
-                    onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                    onChange={(e) =>
+                      setLoginForm({ ...loginForm, password: e.target.value })
+                    }
                     required
                   />
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Login"}
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Logging in...
+                    </>
+                  ) : (
+                    "Login"
+                  )}
                 </Button>
-                <p className="text-xs text-center text-muted-foreground">
-                  Joining via invite? Use the link in your email.
-                </p>
               </form>
             </TabsContent>
 
             <TabsContent value="signup">
               <form onSubmit={handleSignup} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="company">Company name</Label>
-                  <Input
-                    id="company"
-                    value={signupForm.companyName}
-                    onChange={(e) => setSignupForm({ ...signupForm, companyName: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-name">Your name (admin)</Label>
+                  <Label htmlFor="signup-name">Full Name</Label>
                   <Input
                     id="signup-name"
+                    type="text"
+                    placeholder="John Doe"
                     value={signupForm.fullName}
-                    onChange={(e) => setSignupForm({ ...signupForm, fullName: e.target.value })}
+                    onChange={(e) =>
+                      setSignupForm({ ...signupForm, fullName: e.target.value })
+                    }
                     required
                   />
                 </div>
@@ -228,27 +253,55 @@ const Auth = () => {
                   <Input
                     id="signup-email"
                     type="email"
+                    placeholder="you@example.com"
                     value={signupForm.email}
-                    onChange={(e) => setSignupForm({ ...signupForm, email: e.target.value })}
+                    onChange={(e) =>
+                      setSignupForm({ ...signupForm, email: e.target.value })
+                    }
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="signup-password">Password (min 8)</Label>
+                  <Label htmlFor="signup-phone">Phone Number</Label>
+                  <Input
+                    id="signup-phone"
+                    type="tel"
+                    placeholder="+1234567890"
+                    value={signupForm.phone}
+                    onChange={(e) =>
+                      setSignupForm({ ...signupForm, phone: e.target.value })
+                    }
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="signup-password">Password</Label>
                   <Input
                     id="signup-password"
                     type="password"
+                    placeholder="••••••••"
                     value={signupForm.password}
-                    onChange={(e) => setSignupForm({ ...signupForm, password: e.target.value })}
+                    onChange={(e) =>
+                      setSignupForm({ ...signupForm, password: e.target.value })
+                    }
                     required
-                    minLength={8}
                   />
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  You'll be the admin. Invite your team after signup.
+                {/* SECURITY FIX: Role selection removed from signup form
+                    All users are registered as 'client' by default.
+                    Admin roles must be assigned through a secure admin process */}
+                <p className="text-sm text-muted-foreground">
+                  You will be registered as a client. Contact an administrator if you need elevated access.
                 </p>
                 <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create company"}
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating account...
+                    </>
+                  ) : (
+                    "Sign Up"
+                  )}
                 </Button>
               </form>
             </TabsContent>
