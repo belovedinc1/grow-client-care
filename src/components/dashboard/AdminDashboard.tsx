@@ -30,7 +30,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { ServicesManager } from "./ServicesManager";
 import { ClientsManager } from "./ClientsManager";
 import { InvoiceManager } from "./InvoiceManager";
-import { ServiceRequestsManager } from "./ServiceRequestsManager";
+import { TicketsManager } from "./TicketsManager";
 import { ProjectsManager } from "./ProjectsManager";
 import { ExpenseManager } from "./ExpenseManager";
 import { TeamManager } from "./TeamManager";
@@ -38,9 +38,11 @@ import { TeamManager } from "./TeamManager";
 interface AdminDashboardProps {
   user: User;
   onLogout: () => void;
+  companyId: string;
+  role: "admin" | "agent";
 }
 
-const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
+const AdminDashboard = ({ user, onLogout, companyId, role }: AdminDashboardProps) => {
   const [activeTab, setActiveTab] = useState("overview");
   const [stats, setStats] = useState({
     activeClients: 0,
@@ -102,8 +104,8 @@ const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
 
   const navItems = [
     { value: "overview", icon: LayoutDashboard, label: "Overview" },
+    { value: "tickets", icon: MessageSquare, label: "Tickets" },
     { value: "invoices", icon: FileText, label: "Invoices" },
-    { value: "requests", icon: MessageSquare, label: "Requests" },
     { value: "projects", icon: FolderKanban, label: "Projects" },
     { value: "services", icon: Briefcase, label: "Services" },
     { value: "clients", icon: Users, label: "Clients" },
@@ -407,8 +409,8 @@ const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
             <InvoiceManager adminId={user.id} adminProfile={profile} />
           </TabsContent>
 
-          <TabsContent value="requests">
-            <ServiceRequestsManager adminId={user.id} />
+          <TabsContent value="tickets">
+            <TicketsManager companyId={companyId} currentUserId={user.id} isStaff={true} />
           </TabsContent>
 
           <TabsContent value="projects">
