@@ -492,57 +492,6 @@ export type Database = {
           },
         ]
       }
-      service_requests: {
-        Row: {
-          admin_id: string
-          client_id: string
-          created_at: string
-          description: string | null
-          id: string
-          priority: number
-          status: Database["public"]["Enums"]["service_request_status"]
-          title: string
-          updated_at: string
-        }
-        Insert: {
-          admin_id: string
-          client_id: string
-          created_at?: string
-          description?: string | null
-          id?: string
-          priority?: number
-          status?: Database["public"]["Enums"]["service_request_status"]
-          title: string
-          updated_at?: string
-        }
-        Update: {
-          admin_id?: string
-          client_id?: string
-          created_at?: string
-          description?: string | null
-          id?: string
-          priority?: number
-          status?: Database["public"]["Enums"]["service_request_status"]
-          title?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "service_requests_admin_id_fkey"
-            columns: ["admin_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "service_requests_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       services: {
         Row: {
           admin_id: string
@@ -667,15 +616,57 @@ export type Database = {
           },
         ]
       }
+      ticket_ratings: {
+        Row: {
+          ai_analysis: Json | null
+          ai_analyzed_at: string | null
+          company_id: string
+          created_at: string
+          feedback: string | null
+          guest_email: string | null
+          id: string
+          rated_by: string | null
+          rating: Database["public"]["Enums"]["ticket_rating"]
+          ticket_id: string
+        }
+        Insert: {
+          ai_analysis?: Json | null
+          ai_analyzed_at?: string | null
+          company_id: string
+          created_at?: string
+          feedback?: string | null
+          guest_email?: string | null
+          id?: string
+          rated_by?: string | null
+          rating: Database["public"]["Enums"]["ticket_rating"]
+          ticket_id: string
+        }
+        Update: {
+          ai_analysis?: Json | null
+          ai_analyzed_at?: string | null
+          company_id?: string
+          created_at?: string
+          feedback?: string | null
+          guest_email?: string | null
+          id?: string
+          rated_by?: string | null
+          rating?: Database["public"]["Enums"]["ticket_rating"]
+          ticket_id?: string
+        }
+        Relationships: []
+      }
       tickets: {
         Row: {
           assigned_to: string | null
           company_id: string
           created_at: string
-          created_by: string
+          created_by: string | null
           description: string | null
+          guest_email: string | null
+          guest_name: string | null
           id: string
           priority: Database["public"]["Enums"]["ticket_priority"]
+          source: string
           status: Database["public"]["Enums"]["ticket_status"]
           subject: string
           ticket_number: string
@@ -685,10 +676,13 @@ export type Database = {
           assigned_to?: string | null
           company_id: string
           created_at?: string
-          created_by: string
+          created_by?: string | null
           description?: string | null
+          guest_email?: string | null
+          guest_name?: string | null
           id?: string
           priority?: Database["public"]["Enums"]["ticket_priority"]
+          source?: string
           status?: Database["public"]["Enums"]["ticket_status"]
           subject: string
           ticket_number: string
@@ -698,10 +692,13 @@ export type Database = {
           assigned_to?: string | null
           company_id?: string
           created_at?: string
-          created_by?: string
+          created_by?: string | null
           description?: string | null
+          guest_email?: string | null
+          guest_name?: string | null
           id?: string
           priority?: Database["public"]["Enums"]["ticket_priority"]
+          source?: string
           status?: Database["public"]["Enums"]["ticket_status"]
           subject?: string
           ticket_number?: string
@@ -770,10 +767,12 @@ export type Database = {
         Args: { _full_name: string; _token: string }
         Returns: string
       }
+      bootstrap_owner_admin: { Args: never; Returns: string }
       create_company_with_admin: {
         Args: { _admin_full_name: string; _company_name: string }
         Returns: string
       }
+      get_inbound_company: { Args: never; Returns: string }
       get_invite_by_token: {
         Args: { _token: string }
         Returns: {
@@ -828,12 +827,8 @@ export type Database = {
         | "other"
       invite_status: "pending" | "accepted" | "cancelled" | "expired"
       project_status: "active" | "completed" | "on_hold" | "cancelled"
-      service_request_status:
-        | "pending"
-        | "in_progress"
-        | "completed"
-        | "rejected"
       ticket_priority: "low" | "normal" | "high" | "urgent"
+      ticket_rating: "poor" | "bad" | "okay" | "good"
       ticket_status: "open" | "pending" | "closed"
       user_role: "admin" | "client"
     }
@@ -976,13 +971,8 @@ export const Constants = {
       ],
       invite_status: ["pending", "accepted", "cancelled", "expired"],
       project_status: ["active", "completed", "on_hold", "cancelled"],
-      service_request_status: [
-        "pending",
-        "in_progress",
-        "completed",
-        "rejected",
-      ],
       ticket_priority: ["low", "normal", "high", "urgent"],
+      ticket_rating: ["poor", "bad", "okay", "good"],
       ticket_status: ["open", "pending", "closed"],
       user_role: ["admin", "client"],
     },
