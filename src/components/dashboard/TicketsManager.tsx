@@ -194,15 +194,15 @@ export const TicketsManager = ({ companyId, currentUserId, isStaff }: TicketsMan
   const createTicket = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTicket.subject.trim()) return;
-    const { error } = await supabase.from("tickets").insert({
+    const { error } = await supabase.from("tickets").insert([{
       company_id: companyId,
       created_by: currentUserId,
       subject: newTicket.subject,
       description: newTicket.description,
       priority: newTicket.priority,
-      status: "open",
+      status: "open" as const,
       source: "app",
-    });
+    }]);
     if (error) {
       toast({ title: "Failed to create ticket", description: error.message, variant: "destructive" });
       return;
